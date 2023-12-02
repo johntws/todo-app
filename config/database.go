@@ -4,13 +4,9 @@ import (
 	"database/sql"
 	"github.com/go-sql-driver/mysql"
 	"log"
-	"todo-app/repository"
-	"todo-app/service"
 )
 
-var DB *sql.DB
-
-func InitializeMysql() {
+func InitializeMysql() *sql.DB {
 	cfg := mysql.Config{
 		User:                 "root",
 		Passwd:               "root",
@@ -20,17 +16,15 @@ func InitializeMysql() {
 		AllowNativePasswords: true,
 	}
 
-	var err error
-	DB, err = sql.Open("mysql", cfg.FormatDSN())
+	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	pingErr := DB.Ping()
+	pingErr := db.Ping()
 	if pingErr != nil {
 		log.Fatal(pingErr)
 	}
 
-	repository.DB = DB
-	service.DB = DB
+	return db
 }

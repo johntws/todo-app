@@ -1,7 +1,6 @@
 package service
 
 import (
-	"database/sql"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -11,9 +10,23 @@ import (
 	repo "todo-app/repository"
 )
 
-var DB *sql.DB
+type TodoService interface {
+	GetTodos(c *gin.Context)
+	GetTodo(c *gin.Context)
+	CreateTodo(c *gin.Context)
+	UpdateTodo(c *gin.Context)
+	DeleteTodo(c *gin.Context)
+}
 
-func GetTodos(c *gin.Context) {
+type TodoServiceHandler struct {
+	TodoRepo repo.TodoRepository
+}
+
+func NewTodoService(todoRepo repo.TodoRepository) *TodoServiceHandler {
+	return &TodoServiceHandler{TodoRepo: todoRepo}
+}
+
+func (h *TodoServiceHandler) GetTodos(c *gin.Context) {
 	var getTodoReq dto.GetTodosReq
 	var getTodoRes dto.GetTodosRes
 	if err := c.Bind(&getTodoReq); err != nil {
@@ -21,7 +34,7 @@ func GetTodos(c *gin.Context) {
 		return
 	}
 
-	todos, err := repo.FindAllTodos(getTodoReq.PageNo*getTodoReq.PageSize, getTodoReq.PageSize)
+	todos, err := h.TodoRepo.FindAllTodos(getTodoReq.PageNo*getTodoReq.PageSize, getTodoReq.PageSize)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
@@ -45,7 +58,7 @@ func GetTodos(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func GetTodo(c *gin.Context) {
+func (h *TodoServiceHandler) GetTodo(c *gin.Context) {
 	var todoRes dto.Todo
 	idStr := c.Params.ByName("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -55,7 +68,7 @@ func GetTodo(c *gin.Context) {
 		return
 	}
 
-	todo, err := repo.FindTodoById(id)
+	todo, err := h.TodoRepo.FindTodoById(id)
 
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -84,7 +97,7 @@ func GetTodo(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func CreateTodo(c *gin.Context) {
+func (h *TodoServiceHandler) CreateTodo(c *gin.Context) {
 	var todo dto.Todo
 
 	if err := c.BindJSON(&todo); err != nil {
@@ -92,14 +105,14 @@ func CreateTodo(c *gin.Context) {
 		return
 	}
 
-	id, err := repo.CreateTodo(todo)
+	id, err := h.TodoRepo.CreateTodo(todo)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, err.Error())
 		return
 	}
 
-	newTodo, err := repo.FindTodoById(id)
+	newTodo, err := h.TodoRepo.FindTodoById(id)
 
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, err.Error())
@@ -125,8 +138,8 @@ func CreateTodo(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-func UpdateTodo(c *gin.Context) {
-	tx, err := DB.BeginTx(c, nil)
+func (h TodoServiceHandler) UpdateTodo(c *gin.Context) {
+	tx, err := h.TodoRepo.GetConnection().BeginTx(c, nil)
 
 	defer tx.Rollback()
 
@@ -162,14 +175,14 @@ func UpdateTodo(c *gin.Context) {
 	}
 
 	todoModel.ID = id
-	todo, err := repo.FindTodoById(id)
+	todo, err := h.TodoRepo.FindTodoById(id)
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, todo)
 		return
 	}
 
-	rows, err := repo.UpdateTodo(tx, todoModel)
+	rows, err := h.TodoRepo.UpdateTodo(tx, todoModel)
 
 	if err != nil || rows < 1 {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -200,9 +213,9 @@ func UpdateTodo(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func DeleteTodo(c *gin.Context) {
+func (h *TodoServiceHandler) DeleteTodo(c *gin.Context) {
 	res := dto.BaseRes{}
-	tx, err := DB.BeginTx(c, nil)
+	tx, err := h.TodoRepo.GetConnection().BeginTx(c, nil)
 	defer tx.Rollback()
 
 	if err != nil {
@@ -212,7 +225,7 @@ func DeleteTodo(c *gin.Context) {
 
 	idStr := c.Params.ByName("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
-	rows, err := repo.DeleteTodo(tx, id)
+	rows, err := h.TodoRepo.DeleteTodo(tx, id)
 
 	if err != nil || rows < 1 {
 		c.AbortWithStatusJSON(http.StatusNotFound, res)

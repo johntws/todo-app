@@ -6,12 +6,33 @@ import (
 	"todo-app/model"
 )
 
-var DB *sql.DB
+type TodoRepository interface {
+	FindAllTodos(offset, limit int) ([]model.Todo, error)
+	FindTodoById(id int64) (model.Todo, error)
+	CreateTodo(todo dto.Todo) (int64, error)
+	UpdateTodo(tx *sql.Tx, todo model.Todo) (int64, error)
+	DeleteTodo(tx *sql.Tx, id int64) (int64, error)
+	GetConnection() *sql.DB
+}
 
-func FindAllTodos(limit int, offset int) ([]model.Todo, error) {
+type TodoRepo struct {
+	db *sql.DB
+}
+
+func NewTodoRepo(db *sql.DB) *TodoRepo {
+	return &TodoRepo{
+		db: db,
+	}
+}
+
+func (repo *TodoRepo) GetConnection() *sql.DB {
+	return repo.db
+}
+
+func (repo *TodoRepo) FindAllTodos(limit int, offset int) ([]model.Todo, error) {
 	var todos []model.Todo
 
-	rows, err := DB.Query("SELECT * FROM todo limit ?, ?", limit, offset)
+	rows, err := repo.db.Query("SELECT * FROM todo limit ?, ?", limit, offset)
 
 	defer rows.Close()
 
@@ -32,10 +53,10 @@ func FindAllTodos(limit int, offset int) ([]model.Todo, error) {
 	return todos, nil
 }
 
-func FindTodoById(id int64) (model.Todo, error) {
+func (repo *TodoRepo) FindTodoById(id int64) (model.Todo, error) {
 	var todo model.Todo
 
-	rows, err := DB.Query("SELECT * FROM todo where id = ?", id)
+	rows, err := repo.db.Query("SELECT * FROM todo where id = ?", id)
 
 	defer rows.Close()
 
@@ -52,8 +73,8 @@ func FindTodoById(id int64) (model.Todo, error) {
 	return todo, nil
 }
 
-func CreateTodo(todo dto.Todo) (int64, error) {
-	result, err := DB.Exec("INSERT INTO todo (title, description) VALUES (?, ?)", todo.Title, todo.Description)
+func (repo *TodoRepo) CreateTodo(todo dto.Todo) (int64, error) {
+	result, err := repo.db.Exec("INSERT INTO todo (title, description) VALUES (?, ?)", todo.Title, todo.Description)
 
 	if err != nil {
 		return 0, err
@@ -68,7 +89,7 @@ func CreateTodo(todo dto.Todo) (int64, error) {
 	return id, nil
 }
 
-func UpdateTodo(tx *sql.Tx, todo model.Todo) (int64, error) {
+func (repo *TodoRepo) UpdateTodo(tx *sql.Tx, todo model.Todo) (int64, error) {
 	result, err := tx.Exec("UPDATE todo set title = ?, description = ? where id = ?", todo.Title, todo.Description, todo.ID)
 
 	if err != nil {
@@ -84,7 +105,7 @@ func UpdateTodo(tx *sql.Tx, todo model.Todo) (int64, error) {
 	return id, nil
 }
 
-func DeleteTodo(tx *sql.Tx, id int64) (int64, error) {
+func (repo *TodoRepo) DeleteTodo(tx *sql.Tx, id int64) (int64, error) {
 	result, err := tx.Exec("DELETE FROM todo where id = ?", id)
 
 	if err != nil {
